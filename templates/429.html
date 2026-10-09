@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Please wait before trying again | Family Budget Manager{% endblock %}
+
+{% block content %}
+<section class="content-card not-found">
+    <p class="eyebrow">TOO MANY ATTEMPTS</p>
+    <h1>Please wait before trying again</h1>
+    <p class="muted">For account safety, sign-in attempts are temporarily limited.</p>
+    <a class="button" href="{{ url_for('login') }}">Return to sign in</a>
+</section>
+{% endblock %}

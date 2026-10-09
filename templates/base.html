@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A simple place to keep track of family expenses.">
+    <meta name="theme-color" content="#256d5a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/app-icon-192.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/app-icon-192.png') }}">
+    <title>{% block title %}Family Budget Manager{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="{{ url_for('dashboard') }}">Family Budget Manager</a>
+        <nav class="main-nav" aria-label="Main navigation">
+            <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('add_expense') }}">Add expense</a>
+            <a href="{{ url_for('history') }}">Expense history</a>
+            {% if config.AUTH_REQUIRED and session.get('authenticated') %}
+            <form class="logout-form" method="post" action="{{ url_for('logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="nav-logout" type="submit">Log out</button>
+            </form>
+            {% endif %}
+        </nav>
+    </header>
+    <main class="page-content">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="site-footer">A clear view of what your family spends.</footer>
+</body>
+</html>

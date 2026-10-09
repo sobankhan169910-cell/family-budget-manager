@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Expenses for {{ expense_date }} | Family Budget Manager{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">DAILY RECORD</p>
+        <h1>Expenses for {{ expense_date }}</h1>
+        <p class="muted">Entries recorded for this day.</p>
+    </div>
+    <a class="button button-secondary" href="{{ url_for('history') }}">Back to history</a>
+</section>
+{% if request.args.get("updated") %}
+<p class="success-message" role="status">Expense updated successfully.</p>
+{% endif %}
+<section class="summary-grid daily-summary" aria-label="Daily expense summary">
+    <article class="summary-card">
+        <p class="muted">Total spent this day</p>
+        <p class="summary-value">PKR {{ "%.2f"|format(summary.total_cents / 100) }}</p>
+    </article>
+    <article class="summary-card">
+        <p class="muted">Expense records</p>
+        <p class="summary-value">{{ summary.expense_count }}</p>
+    </article>
+</section>
+<section class="content-card">
+    {% if expenses %}
+    <div class="table-wrap responsive-table">
+        <table class="expense-table">
+            <thead><tr><th>Category</th><th>Description and notes</th><th class="amount-cell">Amount</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for expense in expenses %}
+                <tr>
+                    <td data-label="Category">{{ expense.category }}</td>
+                    <td data-label="Description and notes">{{ expense.description }}{% if expense.notes %}<br><span class="muted">{{ expense.notes }}</span>{% endif %}</td>
+                    <td class="amount-cell" data-label="Amount">PKR {{ "%.2f"|format(expense.amount_cents / 100) }}</td>
+                    <td class="actions-cell" data-label="Actions">
+                        <a class="button button-small button-secondary" href="{{ url_for('edit_expense', expense_id=expense.id) }}">Edit</a>
+                        <form class="delete-form" method="post" action="{{ url_for('delete_expense', expense_id=expense.id) }}" data-confirm="Delete this expense? This action cannot be undone.">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="button button-small button-danger" type="submit">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state">There are no expenses recorded for this date.</p>
+    {% endif %}
+</section>
+{% endblock %}

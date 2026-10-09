@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Request could not be processed | Family Budget Manager{% endblock %}
+
+{% block content %}
+<section class="content-card not-found">
+    <p class="eyebrow">REQUEST NOT ACCEPTED</p>
+    <h1>Check the request and try again</h1>
+    <p class="muted">The request was invalid or expired. Return to the app and try again.</p>
+    <a class="button" href="{{ url_for('dashboard') }}">Go to dashboard</a>
+</section>
+{% endblock %}

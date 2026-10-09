@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Page not found | Family Budget Manager{% endblock %}
+
+{% block content %}
+<section class="content-card not-found">
+    <p class="eyebrow">404 ERROR</p>
+    <h1>We couldn't find that page.</h1>
+    <p class="muted">The page may have moved, or the date may not be valid.</p>
+    <a class="button" href="{{ url_for('dashboard') }}">Return to dashboard</a>
+</section>
+{% endblock %}

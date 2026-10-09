@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Temporary error | Family Budget Manager{% endblock %}
+
+{% block content %}
+<section class="content-card not-found">
+    <p class="eyebrow">TEMPORARY ERROR</p>
+    <h1>We could not complete that request</h1>
+    <p class="muted">No expense details are shown here. Please try again shortly.</p>
+    <a class="button" href="{{ url_for('dashboard') }}">Go to dashboard</a>
+</section>
+{% endblock %}

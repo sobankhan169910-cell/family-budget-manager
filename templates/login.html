@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in | Family Budget Manager{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">PRIVATE ACCESS</p>
+        <h1>Sign in</h1>
+        <p class="muted">Sign in to view and manage household expense records.</p>
+    </div>
+</section>
+<section class="content-card login-card">
+    {% if request.args.get("logged_out") %}
+    <p class="success-message" role="status">You have been signed out.</p>
+    {% endif %}
+    {% if error %}
+    <p class="error-message" role="alert">{{ error }}</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username"
+               maxlength="120" required autofocus>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password"
+               autocomplete="current-password" required>
+        <button class="button" type="submit">Sign in</button>
+    </form>
+</section>
+{% endblock %}
