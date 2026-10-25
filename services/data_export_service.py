@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 import os
 import re
 import secrets
@@ -9,10 +10,14 @@ from datetime import datetime
 from database import db
 
 
+_logger = logging.getLogger(__name__)
+
+
 CSV_FIELDS = (
     "id",
     "expense_date",
     "category",
+    "member",
     "amount_pkr",
     "description",
     "notes",
@@ -31,7 +36,11 @@ def _spreadsheet_safe(value):
 
 
 def create_expenses_csv(start_date=None, end_date=None):
-    if start_date is None or end_date is None:
+    if (start_date is None) != (end_date is None):
+        raise ValueError(
+            "Provide both start_date and end_date, or neither for a full export."
+        )
+    if start_date is None:
         expenses = db.get_expenses()
     else:
         expenses = db.get_expenses_between(start_date, end_date)
@@ -45,6 +54,7 @@ def create_expenses_csv(start_date=None, end_date=None):
                 "id": expense["id"],
                 "expense_date": _spreadsheet_safe(expense["expense_date"]),
                 "category": _spreadsheet_safe(expense["category"]),
+                "member": _spreadsheet_safe(expense.get("member", "Soban Khan")),
                 "amount_pkr": (
                     f"{expense['amount_cents'] // 100}."
                     f"{expense['amount_cents'] % 100:02d}"
@@ -99,6 +109,11 @@ def create_database_backup(database_path, backup_directory, public_directory):
                 os.remove(backup_path)
             except FileNotFoundError:
                 pass
+            except OSError:
+                _logger.exception(
+                    "Unable to remove incomplete backup file: %s",
+                    backup_path,
+                )
 
     return filename
 

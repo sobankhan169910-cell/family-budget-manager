@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics | Family Budget Manager{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">INSIGHTS</p>
+        <h1>Spending Analytics</h1>
+        <p class="muted">Visual breakdown of your household spending.</p>
+    </div>
+</section>
+
+<section class="content-card">
+    <div class="section-heading">
+        <h2>Monthly breakdown</h2>
+        <form class="month-selector" method="get" action="{{ url_for('analytics') }}">
+            <label for="month">Month</label>
+            <input id="month" name="month" type="month" value="{{ monthly_report.month }}" required>
+            <button class="button button-small" type="submit">View</button>
+        </form>
+    </div>
+
+    <div class="analytics-summary-row">
+        <div class="analytics-stat">
+            <span class="analytics-stat-label">Total Spent</span>
+            <span class="analytics-stat-value">PKR {{ "%.2f"|format(monthly_report.total.total_cents / 100) }}</span>
+        </div>
+        <div class="analytics-stat">
+            <span class="analytics-stat-label">Transactions</span>
+            <span class="analytics-stat-value">{{ monthly_report.total.expense_count }}</span>
+        </div>
+        <div class="analytics-stat">
+            <span class="analytics-stat-label">All-Time Total</span>
+            <span class="analytics-stat-value">PKR {{ "%.2f"|format(summary.total_cents / 100) }}</span>
+        </div>
+    </div>
+</section>
+
+{% if monthly_report.categories %}
+<section class="content-card">
+    <h2>Category Breakdown — {{ monthly_report.month_label }}</h2>
+    <div class="chart-bars">
+        {% set max_cents = monthly_report.categories[0].total_cents if monthly_report.categories else 1 %}
+        {% for cat in monthly_report.categories %}
+        <div class="chart-bar-row">
+            <span class="chart-bar-label">{{ cat.category }}</span>
+            <div class="chart-bar-track">
+                <div class="chart-bar-fill" style="width: {{ (cat.total_cents / max_cents * 100)|round(1) }}%"></div>
+            </div>
+            <span class="chart-bar-value">PKR {{ "%.2f"|format(cat.total_cents / 100) }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if monthly_report.members %}
+<section class="content-card">
+    <h2>Member Breakdown — {{ monthly_report.month_label }}</h2>
+    <div class="chart-bars member-bars">
+        {% set max_member_cents = monthly_report.members[0].total_cents if monthly_report.members else 1 %}
+        {% for m in monthly_report.members %}
+        <div class="chart-bar-row">
+            <span class="chart-bar-label">{{ m.member }}</span>
+            <div class="chart-bar-track">
+                <div class="chart-bar-fill member-fill" style="width: {{ (m.total_cents / max_member_cents * 100)|round(1) }}%"></div>
+            </div>
+            <span class="chart-bar-value">PKR {{ "%.2f"|format(m.total_cents / 100) }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if member_totals %}
+<section class="content-card">
+    <h2>All-Time Member Totals</h2>
+    <div class="table-wrap responsive-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Member</th>
+                    <th>Expenses</th>
+                    <th class="amount-cell">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mt in member_totals %}
+                <tr>
+                    <td data-label="Member">{{ mt.member }}</td>
+                    <td data-label="Expenses">{{ mt.expense_count }}</td>
+                    <td class="amount-cell" data-label="Total">PKR {{ "%.2f"|format(mt.total_cents / 100) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}

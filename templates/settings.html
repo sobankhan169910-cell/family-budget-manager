@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Settings | Family Budget Manager{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">PREFERENCES</p>
+        <h1>Settings</h1>
+        <p class="muted">Manage your app preferences and data.</p>
+    </div>
+</section>
+
+<section class="content-card">
+    <h2>Data Management</h2>
+    <div class="settings-group">
+        <div class="settings-item">
+            <div>
+                <p class="settings-label">Export All Data</p>
+                <p class="muted">Download all your expenses as a CSV file.</p>
+            </div>
+            <a class="button button-secondary" href="{{ url_for('export_expenses') }}">Export CSV</a>
+        </div>
+        <div class="settings-item">
+            <div>
+                <p class="settings-label">Create Backup</p>
+                <p class="muted">Save a backup of your database file.</p>
+            </div>
+            <form method="post" action="{{ url_for('backup_database') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="button button-secondary" type="submit">Backup Now</button>
+            </form>
+        </div>
+    </div>
+</section>
+
+<section class="content-card">
+    <h2>Offline Status</h2>
+    <div class="settings-group">
+        <div class="settings-item">
+            <div>
+                <p class="settings-label">Sync Status</p>
+                <p class="muted" id="sync-status-text">Checking…</p>
+            </div>
+            <span id="sync-indicator" class="sync-dot synced"></span>
+        </div>
+        <div class="settings-item">
+            <div>
+                <p class="settings-label">Pending Changes</p>
+                <p class="muted" id="pending-count-text">0 pending operations</p>
+            </div>
+            <button class="button button-secondary" id="force-sync-btn" type="button">Sync Now</button>
+        </div>
+    </div>
+</section>
+
+<section class="content-card">
+    <h2>About</h2>
+    <div class="settings-group">
+        <div class="settings-item">
+            <div>
+                <p class="settings-label">Family Budget Manager</p>
+                <p class="muted">A private place to track family expenses. Works offline as an installable PWA.</p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

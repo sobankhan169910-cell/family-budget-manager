@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="description" content="A simple place to keep track of family expenses.">
-    <meta name="theme-color" content="#256d5a">
+    <meta name="theme-color" content="#1a1a2e">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="{{ url_for('manifest_file') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/app-icon-192.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/app-icon-192.png') }}">
     <title>{% block title %}Family Budget Manager{% endblock %}</title>
@@ -17,22 +17,41 @@
 </head>
 <body>
     <header class="site-header">
-        <a class="brand" href="{{ url_for('dashboard') }}">Family Budget Manager</a>
-        <nav class="main-nav" aria-label="Main navigation">
-            <a href="{{ url_for('dashboard') }}">Dashboard</a>
-            <a href="{{ url_for('add_expense') }}">Add expense</a>
-            <a href="{{ url_for('history') }}">Expense history</a>
-            {% if config.AUTH_REQUIRED and session.get('authenticated') %}
-            <form class="logout-form" method="post" action="{{ url_for('logout') }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="nav-logout" type="submit">Log out</button>
-            </form>
-            {% endif %}
-        </nav>
+        <a class="brand" href="{{ url_for('dashboard') }}">
+            <svg class="brand-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            Family Budget
+        </a>
+        {% if config.AUTH_REQUIRED and session.get('authenticated') %}
+        <form class="logout-form" method="post" action="{{ url_for('logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="nav-logout" type="submit">Log out</button>
+        </form>
+        {% endif %}
     </header>
     <main class="page-content">
         {% block content %}{% endblock %}
     </main>
-    <footer class="site-footer">A clear view of what your family spends.</footer>
+    <nav class="bottom-nav" aria-label="Main navigation">
+        <a href="{{ url_for('dashboard') }}" class="bottom-nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <span>Home</span>
+        </a>
+        <a href="{{ url_for('add_expense') }}" class="bottom-nav-item {% if request.endpoint == 'add_expense' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            <span>Add</span>
+        </a>
+        <a href="{{ url_for('history') }}" class="bottom-nav-item {% if request.endpoint == 'history' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>History</span>
+        </a>
+        <a href="{{ url_for('analytics') }}" class="bottom-nav-item {% if request.endpoint == 'analytics' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span>Analytics</span>
+        </a>
+        <a href="{{ url_for('settings') }}" class="bottom-nav-item {% if request.endpoint == 'settings' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Settings</span>
+        </a>
+    </nav>
 </body>
 </html>

@@ -8,6 +8,7 @@ from flask import (
     Flask,
     abort,
     current_app,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -27,6 +28,56 @@ from services import data_export_service, expense_service, report_service
 
 
 csrf = CSRFProtect()
+
+
+def _validate_production_config(app, test_config=None):
+    """Validate production-only settings and install the ProxyFix middleware.
+
+    Raises RuntimeError when the production configuration is unsafe or
+    incomplete, using the same messages as the original inline checks.
+    """
+    if app.config.get("APP_ENV") != "production":
+        return
+
+    persistent_directory = app.config.get("PERSISTENT_DATA_DIR")
+    database_path = os.path.realpath(app.config["DATABASE"])
+    backup_directory = os.path.realpath(app.config["BACKUP_DIRECTORY"])
+    if not app.config.get("AUTH_REQUIRED"):
+        raise RuntimeError("Authentication must be enabled in production.")
+    if not app.config.get("SESSION_COOKIE_SECURE"):
+        raise RuntimeError("Secure session cookies must be enabled in production.")
+    if app.config.get("DEBUG"):
+        raise RuntimeError("Flask debug mode must be disabled in production.")
+    if not persistent_directory:
+        raise RuntimeError("PERSISTENT_DATA_DIR must point to the mounted data disk.")
+    persistent_root = os.path.realpath(persistent_directory)
+    if (
+        (test_config or {}).get("REQUIRE_PERSISTENT_MOUNT", True)
+        and not os.path.ismount(persistent_root)
+    ):
+        raise RuntimeError("PERSISTENT_DATA_DIR is not a mounted persistent disk.")
+    try:
+        database_is_persistent = (
+            os.path.commonpath((database_path, persistent_root)) == persistent_root
+        )
+        backups_are_persistent = (
+            os.path.commonpath((backup_directory, persistent_root)) == persistent_root
+        )
+    except ValueError:
+        database_is_persistent = False
+        backups_are_persistent = False
+    if not database_is_persistent or not backups_are_persistent:
+        raise RuntimeError(
+            "The database and backups must be inside PERSISTENT_DATA_DIR."
+        )
+
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=1,
+        x_proto=1,
+        x_host=1,
+        x_port=1,
+    )
 
 
 def create_app(test_config=None):
@@ -62,46 +113,7 @@ def create_app(test_config=None):
         except ValueError as error:
             raise RuntimeError("APP_PASSWORD_HASH is not a valid Werkzeug password hash.") from error
 
-    if app.config.get("APP_ENV") == "production":
-        persistent_directory = app.config.get("PERSISTENT_DATA_DIR")
-        database_path = os.path.realpath(app.config["DATABASE"])
-        backup_directory = os.path.realpath(app.config["BACKUP_DIRECTORY"])
-        if not app.config.get("AUTH_REQUIRED"):
-            raise RuntimeError("Authentication must be enabled in production.")
-        if not app.config.get("SESSION_COOKIE_SECURE"):
-            raise RuntimeError("Secure session cookies must be enabled in production.")
-        if app.config.get("DEBUG"):
-            raise RuntimeError("Flask debug mode must be disabled in production.")
-        if not persistent_directory:
-            raise RuntimeError("PERSISTENT_DATA_DIR must point to the mounted data disk.")
-        persistent_root = os.path.realpath(persistent_directory)
-        if (
-            (test_config or {}).get("REQUIRE_PERSISTENT_MOUNT", True)
-            and not os.path.ismount(persistent_root)
-        ):
-            raise RuntimeError("PERSISTENT_DATA_DIR is not a mounted persistent disk.")
-        try:
-            database_is_persistent = (
-                os.path.commonpath((database_path, persistent_root)) == persistent_root
-            )
-            backups_are_persistent = (
-                os.path.commonpath((backup_directory, persistent_root)) == persistent_root
-            )
-        except ValueError:
-            database_is_persistent = False
-            backups_are_persistent = False
-        if not database_is_persistent or not backups_are_persistent:
-            raise RuntimeError(
-                "The database and backups must be inside PERSISTENT_DATA_DIR."
-            )
-
-        app.wsgi_app = ProxyFix(
-            app.wsgi_app,
-            x_for=1,
-            x_proto=1,
-            x_host=1,
-            x_port=1,
-        )
+    _validate_production_config(app, test_config)
 
     db.init_app(app)
     csrf.init_app(app)
@@ -116,7 +128,10 @@ def create_app(test_config=None):
     def require_login():
         if not current_app.config["AUTH_REQUIRED"]:
             return None
-        if request.endpoint in {"login", "health_check", "service_worker", "static"}:
+        if request.endpoint in {
+            "login", "health_check", "service_worker",
+            "static", "manifest_file",
+        }:
             return None
         if session.get("authenticated"):
             return None
@@ -124,7 +139,7 @@ def create_app(test_config=None):
 
     @app.after_request
     def add_security_headers(response):
-        if request.endpoint not in {"static", "service_worker"}:
+        if request.endpoint not in {"static", "service_worker", "manifest_file"}:
             response.headers["Cache-Control"] = "no-store"
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
@@ -193,6 +208,15 @@ def create_app(test_config=None):
         response.headers["Cache-Control"] = "no-cache"
         return response
 
+    @app.get("/manifest.webmanifest")
+    def manifest_file():
+        return send_from_directory(
+            app.static_folder,
+            "manifest.webmanifest",
+            mimetype="application/manifest+json",
+            max_age=86400,
+        )
+
     @app.get("/")
     def dashboard():
         summary = report_service.get_dashboard_summary()
@@ -203,11 +227,14 @@ def create_app(test_config=None):
         except ValueError:
             abort(400)
         recent_expenses = expense_service.get_recent_expenses()
+        member_totals = report_service.get_member_totals()
         return render_template(
             "dashboard.html",
             summary=summary,
             monthly_report=monthly_report,
             expenses=recent_expenses,
+            member_totals=member_totals,
+            members=expense_service.MEMBERS,
         )
 
     @app.route("/expenses/add", methods=["GET", "POST"])
@@ -220,6 +247,7 @@ def create_app(test_config=None):
                     category=request.form.get("category", ""),
                     custom_category=request.form.get("custom_category", ""),
                     notes=request.form.get("notes", ""),
+                    member=request.form.get("member", "Soban Khan"),
                 )
             except ValueError as error:
                 return render_template(
@@ -227,6 +255,7 @@ def create_app(test_config=None):
                     error=str(error),
                     form_data=request.form,
                     categories=expense_service.CATEGORIES,
+                    members=expense_service.MEMBERS,
                 ), 400
             return redirect(url_for("add_expense", saved="1"))
 
@@ -234,6 +263,7 @@ def create_app(test_config=None):
             "add_expense.html",
             form_data={"expense_date": date.today().isoformat()},
             categories=expense_service.CATEGORIES,
+            members=expense_service.MEMBERS,
             editing=False,
         )
 
@@ -252,6 +282,7 @@ def create_app(test_config=None):
                     category=request.form.get("category", ""),
                     custom_category=request.form.get("custom_category", ""),
                     notes=request.form.get("notes", ""),
+                    member=request.form.get("member", None),
                 )
                 if not updated:
                     abort(404)
@@ -263,6 +294,7 @@ def create_app(test_config=None):
                     error=str(error),
                     form_data=request.form,
                     categories=expense_service.CATEGORIES,
+                    members=expense_service.MEMBERS,
                 ), 400
 
             return redirect(
@@ -291,8 +323,10 @@ def create_app(test_config=None):
                     else ""
                 ),
                 "notes": expense["notes"],
+                "member": expense.get("member", "Soban Khan"),
             },
             categories=expense_service.CATEGORIES,
+            members=expense_service.MEMBERS,
         )
 
     @app.post("/expenses/<int:expense_id>/delete")
@@ -360,6 +394,129 @@ def create_app(test_config=None):
             expenses=expenses,
             summary=summary,
         )
+
+    @app.get("/analytics")
+    def analytics():
+        try:
+            monthly_report = report_service.get_monthly_report(
+                request.args.get("month")
+            )
+        except ValueError:
+            abort(400)
+        member_totals = report_service.get_member_totals()
+        summary = report_service.get_dashboard_summary()
+        return render_template(
+            "analytics.html",
+            monthly_report=monthly_report,
+            member_totals=member_totals,
+            summary=summary,
+            members=expense_service.MEMBERS,
+        )
+
+    @app.get("/settings")
+    def settings():
+        return render_template("settings.html")
+
+    # ── JSON API for offline sync ──────────────────────────────────────
+    @app.get("/api/expenses")
+    def api_get_expenses():
+        expenses = db.get_expenses()
+        result = []
+        for e in expenses:
+            result.append({
+                "id": e["id"],
+                "amount_cents": e["amount_cents"],
+                "category": e["category"],
+                "description": e.get("description", ""),
+                "notes": e.get("notes", ""),
+                "member": e.get("member", "Soban Khan"),
+                "sync_id": e.get("sync_id"),
+                "expense_date": e["expense_date"],
+                "created_at": e["created_at"],
+            })
+        return jsonify(result)
+
+    @app.post("/api/expenses/sync")
+    def api_sync_expenses():
+        """Accept a batch of offline expense operations and apply them."""
+        data = request.get_json(silent=True)
+        if not data or not isinstance(data, list):
+            return jsonify({"error": "Expected a JSON array of operations"}), 400
+
+        results = []
+        for op in data:
+            action = op.get("action")
+            sync_id = op.get("sync_id")
+            try:
+                if action == "add":
+                    expense_id = db.add_expense(
+                        amount_cents=int(op.get("amount_cents", 0)),
+                        expense_date=op.get("expense_date", ""),
+                        category=op.get("category", "Other"),
+                        notes=op.get("notes", ""),
+                        description=op.get("description", ""),
+                        member=op.get("member", "Soban Khan"),
+                        sync_id=sync_id,
+                    )
+                    results.append({
+                        "sync_id": sync_id,
+                        "server_id": expense_id,
+                        "status": "created",
+                    })
+                elif action == "update":
+                    existing = db.get_expense_by_sync_id(sync_id) if sync_id else None
+                    target_id = existing["id"] if existing else op.get("server_id")
+                    if target_id:
+                        db.update_expense(
+                            expense_id=int(target_id),
+                            amount_cents=int(op.get("amount_cents", 0)),
+                            expense_date=op.get("expense_date", ""),
+                            category=op.get("category", "Other"),
+                            notes=op.get("notes", ""),
+                            description=op.get("description", ""),
+                            member=op.get("member", "Soban Khan"),
+                        )
+                        results.append({
+                            "sync_id": sync_id,
+                            "server_id": target_id,
+                            "status": "updated",
+                        })
+                    else:
+                        results.append({
+                            "sync_id": sync_id,
+                            "status": "not_found",
+                        })
+                elif action == "delete":
+                    existing = db.get_expense_by_sync_id(sync_id) if sync_id else None
+                    target_id = existing["id"] if existing else op.get("server_id")
+                    if target_id:
+                        db.delete_expense(int(target_id))
+                        results.append({
+                            "sync_id": sync_id,
+                            "server_id": target_id,
+                            "status": "deleted",
+                        })
+                    else:
+                        results.append({
+                            "sync_id": sync_id,
+                            "status": "already_deleted",
+                        })
+                else:
+                    results.append({
+                        "sync_id": sync_id,
+                        "status": "unknown_action",
+                    })
+            except Exception as exc:
+                current_app.logger.warning(
+                    "Sync operation failed for sync_id=%s: %s", sync_id, exc
+                )
+                results.append({
+                    "sync_id": sync_id,
+                    "status": "error",
+                    "message": str(exc),
+                })
+
+        return jsonify(results)
 
     @app.errorhandler(404)
     def not_found(error):

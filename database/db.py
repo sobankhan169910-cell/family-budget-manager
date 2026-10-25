@@ -4,6 +4,27 @@ import sqlite3
 from flask import current_app, g
 
 
+# Columns returned to the rest of the application. ``note`` is a
+# backwards-compatible alias of ``notes`` so that the existing templates keep
+# working unchanged.
+DEFAULT_MEMBER = "Soban Khan"
+
+EXPENSE_COLUMNS = (
+    "id",
+    "amount_cents",
+    "category",
+    "description",
+    "notes",
+    "notes AS note",
+    "member",
+    "sync_id",
+    "expense_date",
+    "created_at",
+)
+
+_SELECT_EXPENSES = "SELECT " + ", ".join(EXPENSE_COLUMNS) + " FROM expenses"
+
+
 def get_db():
     if "db" not in g:
         database_path = current_app.config["DATABASE"]
@@ -33,6 +54,8 @@ def init_db():
             description TEXT NOT NULL DEFAULT '',
             category TEXT NOT NULL DEFAULT 'Other',
             notes TEXT NOT NULL DEFAULT '',
+            member TEXT NOT NULL DEFAULT 'Soban Khan',
+            sync_id TEXT DEFAULT NULL,
             expense_date TEXT NOT NULL,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
@@ -45,6 +68,9 @@ def init_db():
         column["name"]
         for column in connection.execute("PRAGMA table_info(expenses)").fetchall()
     }
+    # Older deployments may still have a ``budget_id`` column that was added
+    # outside this module. It is intentionally left in place: dropping it would
+    # destroy data that is not owned by this application.
     if "category" not in existing_columns:
         connection.execute(
             "ALTER TABLE expenses ADD COLUMN category TEXT NOT NULL DEFAULT 'Other'"
@@ -53,18 +79,49 @@ def init_db():
         connection.execute(
             "ALTER TABLE expenses ADD COLUMN notes TEXT NOT NULL DEFAULT ''"
         )
+    if "member" not in existing_columns:
+        connection.execute(
+            "ALTER TABLE expenses ADD COLUMN member TEXT NOT NULL DEFAULT 'Soban Khan'"
+        )
+    if "sync_id" not in existing_columns:
+        connection.execute(
+            "ALTER TABLE expenses ADD COLUMN sync_id TEXT DEFAULT NULL"
+        )
+    # Create the unique index on sync_id after ensuring the column exists.
+    connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_sync_id
+        ON expenses (sync_id) WHERE sync_id IS NOT NULL
+        """
+    )
     connection.commit()
 
 
-def add_expense(amount_cents, expense_date, category, notes):
+def add_expense(
+    amount_cents,
+    expense_date,
+    category,
+    notes,
+    description="",
+    member=None,
+    sync_id=None,
+):
     connection = get_db()
     cursor = connection.execute(
         """
         INSERT INTO expenses
-            (amount_cents, expense_date, category, description, notes)
-        VALUES (?, ?, ?, '', ?)
+            (amount_cents, expense_date, category, description, notes, member, sync_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (amount_cents, expense_date, category, notes),
+        (
+            amount_cents,
+            expense_date,
+            category,
+            description or "",
+            notes or "",
+            member or DEFAULT_MEMBER,
+            sync_id,
+        ),
     )
     connection.commit()
     return cursor.lastrowid
@@ -72,26 +129,58 @@ def add_expense(amount_cents, expense_date, category, notes):
 
 def get_expense(expense_id):
     row = get_db().execute(
-        """
-        SELECT id, amount_cents, category, description, notes,
-               expense_date, created_at
-        FROM expenses
-        WHERE id = ?
-        """,
+        _SELECT_EXPENSES + " WHERE id = ?",
         (expense_id,),
     ).fetchone()
     return dict(row) if row is not None else None
 
 
-def update_expense(expense_id, amount_cents, expense_date, category, notes):
+def get_expense_by_sync_id(sync_id):
+    if not sync_id:
+        return None
+    row = get_db().execute(
+        _SELECT_EXPENSES + " WHERE sync_id = ?",
+        (sync_id,),
+    ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def update_expense(
+    expense_id,
+    amount_cents,
+    expense_date,
+    category,
+    notes,
+    description=None,
+    member=None,
+):
+    current = get_expense(expense_id)
+    if current is None:
+        return False
+
+    new_description = (
+        current["description"] if description is None else description
+    )
+    new_member = (
+        current.get("member") or DEFAULT_MEMBER if member is None else member
+    )
+
     cursor = get_db().execute(
         """
         UPDATE expenses
         SET amount_cents = ?, expense_date = ?, category = ?,
-            notes = ?
+            notes = ?, description = ?, member = ?
         WHERE id = ?
         """,
-        (amount_cents, expense_date, category, notes, expense_id),
+        (
+            amount_cents,
+            expense_date,
+            category,
+            notes,
+            new_description,
+            new_member,
+            expense_id,
+        ),
     )
     get_db().commit()
     return cursor.rowcount > 0
@@ -106,40 +195,27 @@ def delete_expense(expense_id):
     return cursor.rowcount > 0
 
 
-def get_expenses(limit=None):
+def get_expenses(limit=None, member=None):
     connection = get_db()
-    if limit is None:
-        rows = connection.execute(
-            """
-            SELECT id, amount_cents, category, description, notes,
-                   expense_date, created_at
-            FROM expenses
-            ORDER BY expense_date DESC, id DESC
-            """
-        ).fetchall()
-    else:
-        rows = connection.execute(
-            """
-            SELECT id, amount_cents, category, description, notes,
-                   expense_date, created_at
-            FROM expenses
-            ORDER BY expense_date DESC, id DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+    conditions = []
+    parameters = []
+    if member:
+        conditions.append("member = ?")
+        parameters.append(member)
+    query = _SELECT_EXPENSES
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY expense_date DESC, id DESC"
+    if limit is not None:
+        query += " LIMIT ?"
+        parameters.append(limit)
+    rows = connection.execute(query, parameters).fetchall()
     return [dict(row) for row in rows]
 
 
 def get_expenses_for_date(expense_date):
     rows = get_db().execute(
-        """
-        SELECT id, amount_cents, category, description, notes,
-               expense_date, created_at
-        FROM expenses
-        WHERE expense_date = ?
-        ORDER BY id DESC
-        """,
+        _SELECT_EXPENSES + " WHERE expense_date = ? ORDER BY id DESC",
         (expense_date,),
     ).fetchall()
     return [dict(row) for row in rows]
@@ -147,13 +223,9 @@ def get_expenses_for_date(expense_date):
 
 def get_expenses_between(start_date, end_date):
     rows = get_db().execute(
-        """
-        SELECT id, expense_date, category, amount_cents,
-               description, notes, created_at
-        FROM expenses
-        WHERE expense_date >= ? AND expense_date < ?
-        ORDER BY expense_date ASC, id ASC
-        """,
+        _SELECT_EXPENSES
+        + " WHERE expense_date >= ? AND expense_date < ?"
+        + " ORDER BY expense_date ASC, id ASC",
         (start_date, end_date),
     ).fetchall()
     return [dict(row) for row in rows]
@@ -208,6 +280,37 @@ def get_expense_category_totals_between(start_date, end_date):
         ORDER BY total_cents DESC, category COLLATE NOCASE
         """,
         (start_date, end_date),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_expense_member_totals_between(start_date, end_date):
+    rows = get_db().execute(
+        """
+        SELECT COALESCE(NULLIF(TRIM(member), ''), ?) AS member,
+               COUNT(*) AS expense_count,
+               COALESCE(SUM(amount_cents), 0) AS total_cents
+        FROM expenses
+        WHERE expense_date >= ? AND expense_date < ?
+        GROUP BY member
+        ORDER BY total_cents DESC, member COLLATE NOCASE
+        """,
+        (DEFAULT_MEMBER, start_date, end_date),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_expense_member_totals():
+    rows = get_db().execute(
+        """
+        SELECT COALESCE(NULLIF(TRIM(member), ''), ?) AS member,
+               COUNT(*) AS expense_count,
+               COALESCE(SUM(amount_cents), 0) AS total_cents
+        FROM expenses
+        GROUP BY member
+        ORDER BY total_cents DESC, member COLLATE NOCASE
+        """,
+        (DEFAULT_MEMBER,),
     ).fetchall()
     return [dict(row) for row in rows]
 

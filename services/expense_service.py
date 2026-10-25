@@ -4,7 +4,7 @@ from decimal import Decimal, InvalidOperation
 from database import db
 
 
-CATEGORIES = (
+CATEGORIES: tuple[str, ...] = (
     "School Fees",
     "Groceries",
     "Meat/Food",
@@ -15,8 +15,15 @@ CATEGORIES = (
     "Other",
 )
 
+MEMBERS: tuple[str, ...] = (
+    "Soban Khan",
+    "Safwan",
+    "Suhana",
+    "Ami",
+)
 
-def _parse_amount_cents(amount):
+
+def _parse_amount_cents(amount: object) -> int:
     try:
         value = Decimal(str(amount).strip())
     except (InvalidOperation, ValueError):
@@ -33,7 +40,7 @@ def _parse_amount_cents(amount):
     return amount_cents
 
 
-def _parse_expense_date(expense_date):
+def _parse_expense_date(expense_date: object) -> str:
     try:
         parsed_date = date.fromisoformat(str(expense_date).strip())
     except (TypeError, ValueError):
@@ -44,11 +51,21 @@ def _parse_expense_date(expense_date):
     return parsed_date.isoformat()
 
 
-def add_expense(amount, expense_date, category, custom_category="", notes=""):
+def _validate_member(member: object) -> str:
+    clean_member = str(member).strip()
+    if clean_member not in MEMBERS:
+        raise ValueError("Choose a valid family member.")
+    return clean_member
+
+
+def add_expense(
+    amount, expense_date, category, custom_category="", notes="", member="Soban Khan"
+):
     fields = _validate_expense_fields(
         amount, expense_date, category, custom_category, notes
     )
-    return db.add_expense(*fields)
+    clean_member = _validate_member(member)
+    return db.add_expense(*fields, member=clean_member)
 
 
 def _validate_expense_fields(
@@ -83,12 +100,19 @@ def get_expense(expense_id):
 
 
 def update_expense(
-    expense_id, amount, expense_date, category, custom_category="", notes=""
+    expense_id,
+    amount,
+    expense_date,
+    category,
+    custom_category="",
+    notes="",
+    member=None,
 ):
     fields = _validate_expense_fields(
         amount, expense_date, category, custom_category, notes
     )
-    return db.update_expense(expense_id, *fields)
+    clean_member = _validate_member(member) if member else None
+    return db.update_expense(expense_id, *fields, member=clean_member)
 
 
 def delete_expense(expense_id):

@@ -28,11 +28,12 @@
     {% if expenses %}
     <div class="table-wrap responsive-table">
         <table class="expense-table">
-            <thead><tr><th>Category</th><th>Description and notes</th><th class="amount-cell">Amount</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Category</th><th>Member</th><th>Description and notes</th><th class="amount-cell">Amount</th><th>Actions</th></tr></thead>
             <tbody>
             {% for expense in expenses %}
                 <tr>
                     <td data-label="Category">{{ expense.category }}</td>
+                    <td data-label="Member">{{ expense.get('member', 'Soban Khan') }}</td>
                     <td data-label="Description and notes">{{ expense.description }}{% if expense.notes %}<br><span class="muted">{{ expense.notes }}</span>{% endif %}</td>
                     <td class="amount-cell" data-label="Amount">PKR {{ "%.2f"|format(expense.amount_cents / 100) }}</td>
                     <td class="actions-cell" data-label="Actions">

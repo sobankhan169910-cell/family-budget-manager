@@ -1,7 +1,7 @@
 import os
 
 
-def _environment_flag(name, default=False):
+def _environment_flag(name: str, default: bool = False) -> bool:
     value = os.environ.get(name)
     if value is None:
         return default
@@ -27,5 +27,5 @@ class Config:
     PERSISTENT_DATA_DIR = os.environ.get("PERSISTENT_DATA_DIR")
 
     @staticmethod
-    def database_path(instance_path):
+    def database_path(instance_path: str) -> str:
         return os.path.join(instance_path, "family_budget.sqlite3")
