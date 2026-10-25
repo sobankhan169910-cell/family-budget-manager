@@ -13,3 +13,11 @@ instance/
 .flaskenv
 .pytest_cache/
 .coverage
+.venv-workers/
+.vscode/
+__pycache__/
+*.db
+.venv-workers/
+.vscode/
+__pycache__/
+*.db
